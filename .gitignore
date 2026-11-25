@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtuelle Umgebungen
+.venv/
+venv/
+
+# Geheimnisse - NIE ins Repo!
+.env
+*.key
+
+# Logs
+*.log
