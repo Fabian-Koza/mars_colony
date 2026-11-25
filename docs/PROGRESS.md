@@ -7,6 +7,164 @@ Format: `## YYYY-MM-DD — <agent> — <one-line summary>`
 
 ---
 
+## 2026-11-25 — Hermes — Drafted foundational ADR set 0003–0009 (Proposed)
+
+**Done**
+- Answered Fabian's design questions (tile↔room granularity, resources per
+  tile, turn timing real vs in-game) and enumerated the 8 foundational
+  decisions still open before the next build phase, with recommendations.
+- Drafted ADR-0003…0009 (all **Proposed**, pending Fabian's acceptance):
+  0003 one tile = one room + no-gotchas spatial rules; 0004 terrain/deposit
+  split with finite, multi-resource deposits (max 2 types/tile); 0005 full
+  worldbook in static prompt + verbatim history + one repair retry; 0006
+  three terminal states (colony_dead / success / sol_cap), permanent death;
+  0007 scenarios as declarative JSON (fixed maps for A/B, procedural for
+  robustness); 0008 experiment protocol (paired seeds, >=5, header carries
+  code_commit/prompt_hash/scenario_hash/ts, prompt freeze policy);
+  0009 comms + private ownership deferred behind their own future ADRs
+  (refines 0002, does not supersede it).
+- Updated decisions index and PLAN.md open questions.
+
+**Next**
+- Fabian reviews 0003–0009 -> flip to Accepted (or amend/reject per ADR).
+- Build implied once accepted: deposits layer (world/rules/obs/viz),
+  worldbook file + retry-with-feedback in harness, terminal-state split in
+  rules, scenario loader + 3 starter scenarios, trace-header fields +
+  per-turn timestamps in the LLM log.
+- Uncommitted from last session still present (M2/M3 code + docs);
+  commit pending Fabian's word.
+
+**Broken / known gaps**
+- Nothing new; carry-over: `.llm.jsonl` lacks timestamps (ADR-0008 fix).
+
+## 2026-11-05 — Hermes — First full 6-model sweep: results + per-model HTML
+
+**Done**
+- 6-model x seed42 x 2-agent x 40-sol sweep completed; ALL traces replay
+  hash-clean (6/6).
+- Results: 4/6 models survived all 40 sols with full infrastructure
+  (GLM-5.3-Flash, Mistral-Large-4-1T, Qwen3.8-27B, Qwen3.8-Flash-Next).
+  Qwen3-Coder-Next: 0 structures built -> both agents starved at sol 29.
+  gemma-4-31B: built 5 structures but asphyxiated at sol 30 (O2 economy
+  never closed). Deaths always hit BOTH agents the same sol (symmetric
+  trajectories in shared world — note for study design).
+- Format compliance signal: invalid-action counts range 2 (Qwen3.8-Flash)
+  to 8 (Qwen3-Coder); reasons distinguish spatial errors (impassable,
+  not_on_ice) from format errors (malformed_move, unknown_action_type).
+- Per-model visual HTML generated + copied to /home/operations/viz/
+  (one .html per model, raw model outputs embedded); delivery to user via
+  scp (confirmed working).
+- M5 partially underway: visualizer (viz.py) done; metric suite still thin.
+
+**Next (M4/M5)**
+- M4: communication actions + scenario/event design (storms never fired on
+  seed 42 — need storm-heavy seeds to measure stress response).
+- M5: proper metric suite (efficiency, planning horizon, invalid-reason
+  taxonomy); multi-seed matrices (n>=5 seeds/model for any real claim).
+- Consider commit + ADR for trace/HTML artifacts location.
+
+**Broken / known gaps**
+- Single-seed results are anecdotes, not measurements — treat the table as
+  a smoke test of the experimental pipeline (which it now is, end to end).
+
+## 2026-11-05 — Hermes — Trace visualizer (M5 piece) + sweep still running
+
+**Done**
+- `marscolony/viz.py` + CLI `visualize`: reads a trace (+ auto-detects the
+  raw-LLM sidecar), emits a STANDALONE dark-theme HTML replay (ADR-0001:
+  read-only consumer, sim loop untouched). Timeline scrub/play, terrain+
+  structures+agents map with legend, storage gauges, storm badge, per-sol
+  action verdicts (OK/REJECTED+reason), events/deaths, raw model output
+  behind every action.
+- Generated + verified: glm-run.html (40-sol GLM sweep episode, 80 raw
+  outputs embedded) and qwen-smoke.html. Verified structurally (embedded
+  JSON parses, DOM ids complete, node --check OK); local browser unusable
+  (missing libnspr4) so no pixel check — user opens HTML directly.
+- TraceWriter.tick now flushes per tick (long LLM episodes inspectable
+  mid-run).
+
+**In flight**
+- 6-model sweep: 1/6 done at last check (GLM alive 2/2, full infra),
+  Mistral-Large in progress. On exit: verify replays + comparison table +
+  one HTML per model.
+
+**Files for the user**
+- /home/operations/.hermes/cache/scratch/glm-run.html
+- /home/operations/.hermes/cache/scratch/qwen-smoke.html
+
+## 2026-11-05 — Hermes — M3 LLM harness + model sweep runner
+
+**Done**
+- `marscolony/harness.py`: SYSTEM_PROMPT (rules + action JSON schema),
+  `render_observation()` (deterministic text view), `extract_action()`
+  (tolerant JSON extraction; garbage -> INVALID_JSON action the engine
+  LOGS like any invalid action), `OpenAICompatClient` (stdlib urllib,
+  temperature 0), `LLMPolicy` (per-agent conversation + sliding window of
+  last 8 sols).
+- M3 design decisions: (1) action RESULTS are fed back to the model next
+  sol ("REJECTED: <reason>") — the M2 bot never saw results; a reasoning
+  agent must. (2) raw model text logged verbatim to `<out>.llm.jsonl`
+  sidecar; engine trace stays pure. (3) replay determinism independent of
+  model sampling (traces record resolved actions).
+- `marscolony/experiment.py` + CLI `sweep`: model x seed matrix on identical
+  worlds (engine determinism makes cross-model comparison clean); outputs
+  comparison table + results.json + per-run traces + raw-output sidecars.
+- Runner gained `policy_factory` / `on_results` / `llm_log_path`.
+- `tests/test_harness.py`: 12 offline tests (FakeClient, no network):
+  parsing, feedback-injection into next prompt, window bounds, multi-agent,
+  matrix + table. Suite now 31/31.
+- Cloud endpoint confirmed live: api.ai.ustp.host/v1 with the user's 6
+  models (GLM-5.3-Flash, Mistral-Large-4-1T, Qwen3-Coder-Next,
+  Qwen3.8-27B, Qwen3.8-Flash-Next, gemma-4-31B). Harness is
+  model-agnostic via `--model`.
+
+**In flight / next**
+- Live smoke run (Qwen3.8-27B, seed 42, 1 agent, 12 sols) — verify, then
+  run the full 6-model sweep (2 agents, ~40-60 sols, seeds 42+43) with
+  traces kept in scratch; first behavioral comparison table.
+- Then M4: scenario/events design (communication actions, storm policy),
+  M5 metric analysis.
+
+**Broken / known gaps**
+- Live sweep results pending verification of the smoke run.
+
+## 2026-11-05 — Hermes — M2 engine kernel implemented and validated
+
+**Done**
+- Kernel design pinned in `docs/notes/m2-kernel-design.md`: 1 tick = 1 sol;
+  resources power/water/o2/food (colony-shared, ints); action space v0
+  move/mine/build/rest/wait (give/communicate → M4); JSONL trace schema.
+- First code in repo, stdlib-only: `marscolony/` — rng.py (splitmix64, RNG
+  state inside state dict → pure `step()`), world.py, rules.py (tick engine,
+  invalid actions logged not raised), observation.py (radius-3 partial
+  observability), bots.py (deterministic scripted survival bot:
+  seek→mine→panel→mine→extractor→greenhouse→operated), trace.py (writer +
+  deterministic replayer), runner.py (episode harness + offline metrics),
+  __main__.py (`python -m marscolony run|replay|metrics`).
+- `tests/test_engine.py`: 19 tests — purity, determinism, replay, action
+  validation, production math, death conditions, observation contract.
+  All pass.
+- Validation: seed 42 / 2 agents / 60 sols — two runs byte-identical
+  (same sha256), replay OK 60/60 ticks. Sweep 30 seeds × 4 agents ×
+  100 sols: 0 crashes, 0 replay mismatches; 10/30 extinctions
+  (asphyxiation) from the naive wander bot failing to reach ice —
+  legitimate scenario difficulty, good behavioral variance signal.
+- Balance tuning: mine yield 5→8 (see design note) so a built-out colony is
+  sustainable; extinction must come from decisions, not arithmetic.
+
+**Next**
+- M3: LLM harness — observation text builder + JSON action parsing
+  (pydantic schemas OK to introduce in the harness, engine stays stdlib),
+  run a real model against the same interface the scripted bot uses.
+- Consider committing (repo has first code now; untracked: marscolony/,
+  tests/; modified docs + AGENTS/PLAN/PROGRESS).
+
+**Broken / known gaps**
+- Bot navigation is greedy/naive (no pathfinding) → high early-death rate
+  with 4 agents; fine for validation, could improve later.
+- Structures visible colony-wide in observations (comms assumption;
+  revisit in M4 observability design).
+
 ## 2026-11-05 — Hermes — Wayfinder map charted: "Find the Start"
 
 **Done**
@@ -53,6 +211,26 @@ Format: `## YYYY-MM-DD — <agent> — <one-line summary>`
 
 **Broken / known gaps**
 - No ADRs yet; architecture is proposal-level, not accepted.
+
+## 2026-11-05 — Hermes — Engine decisions settled; ADR-0001 & 0002 accepted
+
+**Done**
+- Settled the open architecture decisions with Fabian:
+  Python · text/JSON obs–action API · multi-agent from day one (max 4) ·
+  abstract resource-colony fidelity · headless deterministic tick engine.
+- Wrote `decisions/0001-engine-shape-headless-python-tick-engine.md` and
+  `decisions/0002-agent-interface-text-json-api.md` (Accepted); updated
+  decisions index, PLAN.md (M1 done, open questions trimmed), and the
+  approach note.
+
+**Next**
+- M2 engine kernel: remaining design details are the trace/log schema,
+  minimal resource set + action space, and tick granularity (1 sol vs
+  fraction). These can be decided during kernel design/implementation —
+  explicit go-ahead from Fabian needed before writing first code.
+
+**Broken / known gaps**
+- None.
 
 ## 2026-11-03 — Hermes — Claude Code installed & wired in
 
