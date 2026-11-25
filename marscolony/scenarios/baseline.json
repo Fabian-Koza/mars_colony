@@ -1,0 +1,4 @@
+{
+  "name": "baseline",
+  "comment": "Reference world: standard 32x32 procedural map, mild storms. Use with fixed seed lists for model A/B (ADR-0008)."
+}
