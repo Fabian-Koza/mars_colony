@@ -1,8 +1,8 @@
 # Simulation Engine — Approach (note)
 
 > What this is: engineering approach for the Mars Colony simulation engine.
-> Status: proposal / discussion — NOT yet accepted decisions. Decisions that
-> settle here get promoted to ADRs.
+> Status: core decisions ACCEPTED as ADR-0001/0002 (2026-11-05); rest is
+> design detail feeding M2.
 
 ## Core principle
 
@@ -83,13 +83,10 @@ Design the log schema around the questions we want to ask:
 - (multi-agent later) cooperation, negotiation, norm formation
 Every metric must be computable offline from the trace alone.
 
-## Open decisions (need ADRs once settled)
+## Open decisions (RESOLVED 2026-11-05 → ADR-0001, ADR-0002)
 
-1. Language: Python recommended (LLM harness ecosystem, fast iteration;
-   speed is not a constraint at turn-based scale).
-2. Agent interface: pure text/JSON tool API vs rendered/visual env
-   (pixels would imply a totally different stack — recommend text/JSON).
-3. Single agent first, or multi-agent from day one.
-4. Fidelity level: abstract resource-colony sim vs physics-heavy simulation
-   (recommend abstract — we measure decisions, not thermodynamics).
-5. Turn granularity: 1 tick = 1 sol vs fraction of a sol.
+1. Language: **Python** (ADR-0001).
+2. Agent interface: **text/JSON observation–action API** (ADR-0002).
+3. Multi-agent from day one, **max 4 agents** (ADR-0002).
+4. Fidelity: **abstract resource-colony sim** (ADR-0001).
+5. Tick granularity: still open — decide during M2 kernel design.
