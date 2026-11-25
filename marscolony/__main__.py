@@ -20,6 +20,9 @@ def main(argv=None):
     r.add_argument("--seed", type=int, default=42)
     r.add_argument("--agents", type=int, default=2)
     r.add_argument("--sols", type=int, default=60)
+    r.add_argument("--scenario", default="baseline",
+                   help="bundled scenario name or path to a scenario .json "
+                        "(ADR-0007); e.g. baseline, storm_heavy, depletion")
     r.add_argument("--out", default="trace.jsonl")
     r.add_argument("--policy", choices=["scripted", "llm"], default="scripted")
     r.add_argument("--model", default=os.environ.get("MARS_MODEL", ""))
@@ -50,6 +53,8 @@ def main(argv=None):
     sw.add_argument("--agents", type=int, default=2)
     sw.add_argument("--sols", type=int, default=60)
     sw.add_argument("--outdir", default="sweep")
+    sw.add_argument("--scenario", default="baseline",
+                    help="bundled scenario name or scenario .json path")
     sw.add_argument("--base-url",
                     default=os.environ.get("OPENAI_BASE_URL", ""))
     sw.add_argument("--api-key-env", default="OPENAI_API_KEY")
@@ -73,10 +78,17 @@ def main(argv=None):
             kwargs["policy_factory"] = factory
             kwargs["llm_log_path"] = args.llm_log or (args.out + ".llm.jsonl")
         result = run_episode(args.seed, args.agents, args.sols, args.out,
-                             **kwargs)
+                             scenario=args.scenario, **kwargs)
         print(json.dumps(result, indent=2, sort_keys=True))
     elif args.cmd == "replay":
         res = replay(args.trace)
+        if res.get("version_mismatch"):
+            from . import __version__ as _v
+            print(f"replay SKIPPED: trace recorded by engine "
+                  f"{res['version_at_record']}, this engine is {_v} — "
+                  f"schema differs (ADR-0004/0006). "
+                  f"Use the matching version from git history.")
+            return 2
         verdict = "OK" if not res["mismatches"] else "MISMATCH"
         print(f"replay {verdict}: {res['ticks_checked']} ticks checked "
               f"(engine version at record: {res['version_at_record']})")
@@ -98,7 +110,8 @@ def main(argv=None):
         models = [m.strip() for m in args.models.split(",") if m.strip()]
         seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
         results = run_matrix(models, seeds, args.agents, args.sols,
-                             args.outdir, args.base_url, args.api_key_env)
+                             args.outdir, args.base_url, args.api_key_env,
+                             scenario=args.scenario)
         print(comparison_table(results))
         write_results_json(results, os.path.join(args.outdir, "results.json"))
         print(f"\ntraces + raw-output logs in {args.outdir}/, "

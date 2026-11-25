@@ -24,8 +24,10 @@ def default_client_factory(base_url, api_key_env, model):
 
 
 def run_matrix(models, seeds, n_agents, sols, out_dir, base_url,
-               api_key_env, client_factory=None):
-    """models x seeds grid. Returns list of per-run result dicts.
+               api_key_env, client_factory=None, scenario="baseline"):
+    """models x seeds grid, same scenario for every cell (ADR-0008 paired
+    protocol: identical seed list + scenario across models).
+    Returns list of per-run result dicts.
 
     client_factory(model) -> make_policy(agent_id): injectable for tests."""
     os.makedirs(out_dir, exist_ok=True)
@@ -46,11 +48,12 @@ def run_matrix(models, seeds, n_agents, sols, out_dir, base_url,
 
             r = run_episode(seed=seed, n_agents=n_agents, max_ticks=sols,
                             trace_path=trace, policy_factory=factory,
-                            llm_log_path=side)
+                            llm_log_path=side, scenario=scenario)
             m = metrics_from_trace(trace)
             r.update({"model": model, "sweep_dir": out_dir,
                       "ok_actions": m["ok_actions"],
                       "invalid_actions": m["invalid_actions"],
+                      "sustainable_sols": m["sustainable_sols"],
                       "trace": trace, "llm_log": side})
             results.append(r)
     return results
@@ -58,8 +61,8 @@ def run_matrix(models, seeds, n_agents, sols, out_dir, base_url,
 
 def comparison_table(results) -> str:
     """Plain-text comparison table (offline, from results+metrics only)."""
-    hdr = (f"{'model':38} {'seed':>4} {'surv':>5} {'ok':>5} {'bad':>4} "
-           f"{'built':>3} {'deaths':>6}  invalid by reason")
+    hdr = (f"{'model':38} {'seed':>4} {'outcome':>11} {'surv':>5} "
+           f"{'ok':>5} {'bad':>4} {'built':>3} {'deaths':>6}  invalid by reason")
     lines = [hdr, "-" * len(hdr)]
     for r in results:
         built = [s for s in r["structures"] if s != "base"]
@@ -67,6 +70,7 @@ def comparison_table(results) -> str:
         reasons = ",".join(f"{k}:{v}" for k, v in
                            sorted(r["invalid_actions"]["by_reason"].items()))
         lines.append(f"{r['model']:38} {r['seed']:>4} "
+                     f"{r.get('outcome', '?'):>11} "
                      f"{r['sols_survived']:>5} {r['ok_actions']:>5} "
                      f"{bad:>4} {len(built):>3} {len(r['deaths']):>6}  {reasons}")
     return "\n".join(lines)

@@ -19,13 +19,17 @@ import json
 import re
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 SYSTEM_PROMPT = """You are agent {agent_id} in a Mars colony survival simulation. \
 Time advances in sols (ticks). You act once per sol.
 
 WORLD
 - Grid map, you see a 7x7 window around you. Terrain: . ground, b basalt \
-(both passable), i ice (passable, mineable for water), c crater (impassable).
+(both passable), c crater (impassable).
+- Deposits: ice deposits lie on some tiles (they hold FINITE water, shown \
+with remaining amount when in your window). Mining is possible only while \
+standing on a tile with a live ice deposit; empty deposits stay visible.
 - Colony storage (shared by all agents): power, water, o2, food. Every sol \
 each living agent consumes 1 o2, 1 water, 1 food. Out of o2 = death.
 - You have energy 0..100 and health 0..100. Actions cost energy: move 2, \
@@ -37,20 +41,26 @@ greenhouse (1 water + 1 power -> 2 food/sol). Costs: panel 10, \
 extractor 15, greenhouse 20 water.
 - Dust storms periodically cut solar power.
 
+GOAL
+- Win: keep the colony net-positive — production covering ALL consumption — \
+for {sustained_sols} consecutive sols. Lose: every agent dead. Hard ceiling: \
+{sol_cap} sols.
+
 ACTIONS - reply with EXACTLY ONE JSON object, no other text:
   {{"type":"move","dx":DX,"dy":DY}}   one step, dx/dy in -1/0/1, exactly one nonzero
-  {{"type":"mine"}}                   only while standing on ice
+  {{"type":"mine"}}                   only while standing on live ice
   {{"type":"build","structure":"panel|extractor|greenhouse"}}
   {{"type":"rest"}}
   {{"type":"wait"}}
 Invalid actions are rejected (energy is not spent) and explained back to you.
 
-GOAL: keep yourself and any other agents alive as long as possible."""
+PRIORITY: keep yourself and any other agents alive; winning beats surviving."""
 
 
 def render_observation(obs: dict) -> str:
     """Deterministic text view of an observation dict."""
     me = obs["self"]
+    dep = obs["visible"].get("deposits") or []
     lines = [
         f"SOL {obs['sol']}",
         f"you: {me['id']} at ({me['x']},{me['y']}) energy {me['energy']} "
@@ -60,13 +70,20 @@ def render_observation(obs: dict) -> str:
         "structures: " + (" ".join(f"{s['type']}({s['x']},{s['y']})"
                                    for s in obs["structures"]) or "none"),
         f"visible terrain (top-left corner at x={obs['visible']['x0']},"
-        f"y={obs['visible']['y0']}; . ground, b basalt, i ice, c crater):",
+        f"y={obs['visible']['y0']}; . ground, b basalt, c crater):",
     ]
     lines += ["  " + row for row in obs["visible"]["terrain"]]
+    lines.append("deposits in view: " + (" ".join(
+        f"{'/'.join(f'{k}x{v}' for k, v in sorted(d['amount'].items()))}"
+        f"@({d['x']},{d['y']})" for d in dep) or "none"))
     agents = obs.get("nearby_agents") or []
     lines.append("nearby agents: " + (" ".join(
         f"{a['id']}@({a['x']},{a['y']})" for a in agents) or "none"))
     lines.append(f"dust storm active: {'yes' if obs['storm'] else 'no'}")
+    goal = obs.get("goal") or {}
+    if goal:
+        lines.append(f"goal: net-positive {goal['sustained_sols']} sols "
+                     f"running (streak {goal['streak']}, cap {goal['sol_cap']})")
     return "\n".join(lines)
 
 
@@ -167,10 +184,17 @@ class LLMPolicy:
             self.convo = self.convo[users[-self.window]:]
 
         raw = self.client.complete(
-            SYSTEM_PROMPT.format(agent_id=self.agent_id), self.convo)
+            SYSTEM_PROMPT.format(agent_id=self.agent_id,
+                                 sustained_sols=obs.get("goal", {})
+                                 .get("sustained_sols", "?"),
+                                 sol_cap=obs.get("goal", {})
+                                 .get("sol_cap", "?")),
+            self.convo)
         action = extract_action(raw)
         self.convo.append({"role": "assistant", "content": raw})
         self.log.append({"sol": obs.get("sol"), "agent": self.agent_id,
+                         "ts": datetime.now(timezone.utc).isoformat(
+                             timespec="seconds"),
                          "raw": raw, "parsed": action})
         return action
 
