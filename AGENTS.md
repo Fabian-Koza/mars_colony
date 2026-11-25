@@ -33,11 +33,17 @@ Rules below apply to every agent working in this repo, current or future.
 3. **Decisions get an ADR.** Any non-trivial, hard-to-reverse choice (tech stack,
    architecture, data model) gets a numbered file in `docs/decisions/` — copy
    `docs/decisions/0000-template.md`. Don't edit accepted ADRs; supersede them.
-4. **No speculative code.** During the planning phase, do not create source
+4. **Guidebook tracks the engine version.** `guidebook.md` (repo root) is the
+   canonical plain-language description of the simulation — world, rules,
+   outcomes, scenarios. It must be updated in the **same commit** that bumps
+   `marscolony.__version__`, including its version stamp and the version
+   history section at the bottom. If guidebook and code disagree, the code
+   wins and the guidebook is a bug.
+5. **No speculative code.** During the planning phase, do not create source
    code, package manifests, or CI config unless explicitly asked.
-5. **Small, reviewable changes.** Prefer many small doc/commit-sized changes
+6. **Small, reviewable changes.** Prefer many small doc/commit-sized changes
    over one large rewrite.
-6. **Secrets** never go in this repo (no API keys, no `.env` committed).
+7. **Secrets** never go in this repo (no API keys, no `.env` committed).
 
 ## Repo map
 
@@ -45,6 +51,7 @@ Rules below apply to every agent working in this repo, current or future.
 AGENTS.md            This file — agent config & rules (source of truth)
 CLAUDE.md            Claude Code entry point — imports AGENTS.md, add no rules here
 README.md            Human-facing project intro
+guidebook.md         Canonical sim description — MUST update with every version bump
 docs/
   README.md          Docs index — keep current when adding docs
   PLAN.md            The plan: vision, goals, scope, roadmap
