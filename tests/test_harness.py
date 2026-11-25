@@ -74,7 +74,7 @@ class TestLLMPolicyIntegration(unittest.TestCase):
         res = run_episode(seed=3, n_agents=1, max_ticks=5, trace_path=path,
                           policy_factory=lambda: LLMPolicy(client, "a1"),
                           llm_log_path=side)
-        self.assertIsNone(res["episode_over"])
+        self.assertEqual(res["outcome"], "sol_cap")   # alive at the cap
         with open(side) as f:
             entries = [json.loads(l) for l in f]
         self.assertEqual(len(entries), 5)
@@ -91,7 +91,7 @@ class TestLLMPolicyIntegration(unittest.TestCase):
                     policy_factory=lambda: LLMPolicy(client, "a1"))
         second_prompt = client.calls[1]["messages"][-1]["content"]
         self.assertIn("REJECTED", second_prompt)
-        self.assertIn("not_on_ice", second_prompt)
+        self.assertIn("no_deposit", second_prompt)
 
     def test_conversation_window_bounds_memory(self):
         client = FakeClient(['{"type":"wait"}'])

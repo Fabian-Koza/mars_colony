@@ -52,9 +52,12 @@ class TestPurityAndDeterminism(unittest.TestCase):
 
     def test_replay_matches_run(self):
         path = tmp_trace()
-        run_episode(seed=11, n_agents=2, max_ticks=50, trace_path=path)
+        res_run = run_episode(seed=11, n_agents=2, max_ticks=50, trace_path=path)
         res = replay(path)
-        self.assertEqual(res["ticks_checked"], 50)
+        # replay must match whatever the run actually recorded (the episode
+        # may end early with an outcome — in this seed the bot dies under
+        # the v0.3 deposit world, which is itself behavioral data)
+        self.assertEqual(res["ticks_checked"], res_run["sols_survived"])
         self.assertEqual(res["mismatches"], [])
 
 
@@ -64,7 +67,7 @@ class TestActionValidation(unittest.TestCase):
         bad = [
             (act("ghost", type="wait"), "unknown_agent"),
             (act("a1", type="self_destruct"), "unknown_action_type"),
-            (act("a1", type="mine"), "not_on_ice"),
+            (act("a1", type="mine"), "no_deposit"),
             (act("a1", type="build", structure="death_star"),
              "unknown_structure_type"),
             (act("a1", type="build", structure="panel"), "tile_occupied"),
@@ -188,7 +191,9 @@ class TestScriptedBotIntegration(unittest.TestCase):
         self.assertIn("panel", res["structures"])
         self.assertIn("extractor", res["structures"])
         self.assertIn("greenhouse", res["structures"])
-        self.assertIsNone(res["episode_over"])
+        # engine v0.3 (ADR-0006): hitting the tick ceiling is an explicit
+        # terminal state, distinct from success and death
+        self.assertEqual(res["outcome"], "sol_cap")
         self.assertEqual(res["sols_survived"], 60)
         self.assertEqual(res["deaths"], [])
 
