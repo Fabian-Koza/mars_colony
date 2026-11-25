@@ -7,6 +7,47 @@ Format: `## YYYY-MM-DD — <agent> — <one-line summary>`
 
 ---
 
+## 2026-11-25 — Hermes — Engine branch: v0.3 engine implementing ADR-0004..0008
+
+**Done**
+- New branch `engine` (from fabian): first ADR-conformant engine build,
+  version `0.3.0-engine`. Evolves the M2 kernel rather than rewriting.
+- ADR-0004: terrain is passability-only; sparse `deposits` layer, finite
+  amounts (mine withdraws, depleted stays revealed), max 2 types/tile;
+  ice terrain char retired (old 0.2.x traces now refused at replay with a
+  clear version-mismatch message).
+- ADR-0006: three terminal outcomes — `colony_dead`, `success`
+  (scenario-declared net-positive streak; per-sol balance ledger incl.
+  structure inputs; a colony mining to stay alive is NOT self-sustaining),
+  `sol_cap` (runner-owned ceiling).
+- ADR-0007: `marscolony/scenario.py` loader + bundled scenarios
+  `baseline`, `storm_heavy` (stress), `depletion` (fixed 21x17 map: visible
+  seam + drying near patch + far ridge = exploration pressure).
+  Scenario dict embedded in state; CLI `--scenario` on run/sweep.
+- ADR-0008 (engine-side): trace header carries scenario+hash, code_commit,
+  ts_start/ts_end; LLM sidecar entries now have per-turn `ts`.
+  ADR-0005 worldbook-file + repair-retry deliberately NOT built yet.
+- Fixed-map validation lesson: DEFAULT's w/h leak through the merge —
+  fixed-map geometry is authoritative (regression test added).
+- Verified: 48/48 tests; scripted-bot episodes on all 3 scenarios replay
+  hash-clean; depletion kills a built-out colony at sol ~56 (pressure
+  works); baseline max sustain streak 6/30 (win is reachable but demands
+  more than single build-out — legacy bot cannot win yet, by design:
+  `success` should separate thriving from capping).
+
+**Next**
+- Fabian accepts/rejects ADR-0003..0009 (engine implements the drafts).
+- Worldbook file + one-repair-retry (ADR-0005) in harness; prompt version
+  bump protocol; then a 0.3.0 sweep (5 seeds x baseline+depletion) to get
+  first outcome-distribution data.
+- Bot v2 (optional): mine-marathon/rest cadence + panel doubling so the
+  scripted client can demonstrate a `success` run end to end.
+
+**Broken / known gaps**
+- Legacy scripted bot dies in most v0.3 baseline seeds (57-110 sols) —
+  acceptable for a validation client, but a `success`-capable reference
+  bot is still missing.
+
 ## 2026-11-25 — Hermes — Drafted foundational ADR set 0003–0009 (Proposed)
 
 **Done**
