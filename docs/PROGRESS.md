@@ -7,6 +7,36 @@ Format: `## YYYY-MM-DD — <agent> — <one-line summary>`
 
 ---
 
+## 2026-11-26 — Hermes — Smoke run on worldbook v1.0 + 5-seed sweep launched
+
+**Done**
+- First live episode on the ADR-0005 harness: Qwen3.8-Flash-Next-NVFP4,
+  2 agents, baseline, seed 42, 40 sols -> `sol_cap`, both alive, no deaths.
+  Built panel+extractor+2 greenhouses; water pinned at 0 most of the last
+  third — alive but mining-to-stay-alive, so 0 sustainable sols (ADR-0006
+  distinguishes this from success exactly as designed).
+- Format/decision split works on a real model: 80 turns, 0 repair retries,
+  0 auto-waits; the only 2 invalid actions were decision-level
+  (`tile_occupied` at sols 6/8, never repeated). Median decision latency
+  10s, max 144s — now a real metric via sidecar `ts`.
+- Pipeline verified: replay OK 40/40; header fully attributed
+  (prompt v1.0 hash 75ead4498eba, commit 6f91036, scenario b3d5ec4c99b8);
+  HTML replay (smoke-flash.html) structurally checked + delivered via scp.
+- Launching the first protocol-conformant sweep (ADR-0008): 5 seeds
+  (42-46, shared list) x {baseline, depletion} x 1 model
+  (Qwen3.8-Flash-Next), 2 agents, 60-sol ceiling, both scenarios in
+  parallel; artifacts in `~/.hermes/cache/scratch/sweep-031/`
+  (convention for sweep artifacts still an open item).
+
+**Next**
+- On sweep completion: replay all traces, medians+spread outcome table,
+  HTML per run, tarball handoff.
+- Bot v2 (success-capable) so scripted clients can demonstrate `success`.
+
+**Broken / known gaps**
+- Sweep runtime ~5-6h per scenario at live latency; monitor ticks report
+  progress from flushed trace lines.
+
 ## 2026-11-26 — Fabian + Hermes — ADR-0003..0009 ACCEPTED; engine merged to fabian
 
 **Done**
