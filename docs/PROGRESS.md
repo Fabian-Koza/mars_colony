@@ -33,6 +33,26 @@ Format: `## YYYY-MM-DD — <agent> — <one-line summary>`
   HTML per run, tarball handoff.
 - Bot v2 (success-capable) so scripted clients can demonstrate `success`.
 
+**Sweep results (completed same day)**
+- 10/10 traces replay hash-clean (0 mismatches). Combined (model =
+  Qwen3.8-Flash-Next-NVFP4, 2 agents, 60-sol cap, paired seeds 42-46):
+  | scenario  | outcomes              | surv median [range] | peak streak | deaths |
+  |-----------|-----------------------|---------------------|-------------|--------|
+  | baseline  | 4x sol_cap, 1x dead   | 60 [55-60]          | 4-9         | 2      |
+  | depletion | 5x colony_dead        | 49 [41-51]          | 4-12        | 10     |
+- All 12 deaths: starvation_or_dehydration; every colony ended with water
+  at or near 0 while food stores remained (16-68) — the model consistently
+  fails to bank water, dies of thirst with full pantries on depletion.
+- Format competence across 1061 agent-turns (589 baseline + 472 depletion):
+  9 repair retries total (7+2), 0 auto-waits — decision errors (2-4/run,
+  mostly tile_occupied / deposit_depleted) cleanly separable from format
+  errors, as designed.
+- Instrument validation: depletion is lethal for a strong-but-thirsty
+  planner; baseline caps survival. No success anywhere -> the 30-sol
+  streak bar still separates thriving from capping (ADR-0006 intent).
+- Artifacts: scratch/sweep-031/{baseline,depletion}/ (traces+sidecars+
+  html), index.html, bundle scratch/sweep-031-replays.tar.gz (11 files).
+
 **Broken / known gaps**
 - Sweep runtime ~5-6h per scenario at live latency; monitor ticks report
   progress from flushed trace lines.
