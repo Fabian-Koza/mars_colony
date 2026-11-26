@@ -64,7 +64,7 @@ def main(argv=None):
     if args.cmd == "run":
         kwargs = {}
         if args.policy == "llm":
-            from .harness import LLMPolicy, OpenAICompatClient
+            from .harness import LLMPolicy, OpenAICompatClient, prompt_info
             api_key = os.environ.get(args.api_key_env, "")
             if not args.model or not args.base_url or not api_key:
                 p.error("llm policy needs --model, --base-url and "
@@ -77,6 +77,7 @@ def main(argv=None):
                 return LLMPolicy(client, f"a{counter['n']}")
             kwargs["policy_factory"] = factory
             kwargs["llm_log_path"] = args.llm_log or (args.out + ".llm.jsonl")
+            kwargs["prompt_info"] = prompt_info(model_id=args.model)
         result = run_episode(args.seed, args.agents, args.sols, args.out,
                              scenario=args.scenario, **kwargs)
         print(json.dumps(result, indent=2, sort_keys=True))

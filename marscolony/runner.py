@@ -20,12 +20,16 @@ from .world import make_state
 def run_episode(seed: int, n_agents: int, max_ticks: int, trace_path: str,
                 scenario=None, policy=scripted_policy,
                 memory_factory=new_memory,
-                policy_factory=None, llm_log_path=None) -> dict:
+                policy_factory=None, llm_log_path=None,
+                prompt_info=None) -> dict:
     """Run one episode. `scenario`: dict or scenario name/path (ADR-0007).
     `policy_factory` (M3): zero-arg callable creating a fresh policy object
     per agent; if a policy has .on_results(list), the runner feeds it that
     agent's resolved actions after each tick. `llm_log_path`: write
-    raw-model-output sidecar at the end."""
+    raw-model-output sidecar at the end. `prompt_info` (ADR-0008): 
+    {prompt_version, prompt_hash, model_id} for the trace header — set by
+    LLM runs, None for scripted (engine state schema is unaffected, so
+    replay compatibility is preserved)."""
     sc = scenario if isinstance(scenario, dict) or scenario is None \
         else load_scenario(scenario)
     sc = sc or None
@@ -36,7 +40,7 @@ def run_episode(seed: int, n_agents: int, max_ticks: int, trace_path: str,
     mems = {a["id"]: memory_factory() for a in state["agents"]}
     policies = ({a["id"]: policy_factory() for a in state["agents"]}
                 if policy_factory else {})
-    writer = TraceWriter(trace_path, state)
+    writer = TraceWriter(trace_path, state, prompt_info=prompt_info)
 
     deaths = []
     ticks = 0

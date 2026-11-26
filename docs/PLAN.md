@@ -48,10 +48,11 @@ layer diagram: [notes/simulation-engine-approach.md](notes/simulation-engine-app
 | M4 — Scenarios & events | Seeded random events (dust storms etc.), scenario configs, multi-agent if decided | Not started |
 | M5 — Analysis | Offline metrics from traces, experiment runner, optional trace visualizer | Partial (visualizer + sweep runner done, 2026-11-05) |
 
-> **Engine branch (2026-11-25):** `engine` branch carries `0.3.0-engine` —
+> **Engine branch (2026-11-26):** `engine` branch carries `0.3.0-engine` —
 > the first build implementing the draft ADRs 0004–0008 (deposit layering,
-> terminal outcomes, declarative scenarios, trace attribution). Merges back
-> to `fabian` once the ADRs are accepted.
+> terminal outcomes, declarative scenarios, trace attribution) plus the
+> ADR-0005 harness protocol (versioned worldbook file, verbatim history,
+> one repair retry). Merges back to `fabian` once the ADRs are accepted.
 
 ## Open questions
 

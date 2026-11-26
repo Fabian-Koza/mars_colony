@@ -9,8 +9,24 @@ sols survived, ok/invalid actions by reason, structures built, deaths.
 import json
 import os
 
-from .harness import LLMPolicy, OpenAICompatClient
+from .harness import LLMPolicy, OpenAICompatClient, prompt_info
 from .runner import metrics_from_trace, run_episode
+
+
+def sidecar_harness_metrics(llm_log_path: str) -> dict:
+    """ADR-0005 retry telemetry from the sidecar (per-turn entries).
+    Missing file (scripted run) -> zeros."""
+    out = {"retries_total": 0, "turns": 0, "auto_waits": 0}
+    if not llm_log_path or not os.path.exists(llm_log_path):
+        return out
+    with open(llm_log_path, encoding="utf-8") as f:
+        for line in f:
+            e = json.loads(line)
+            out["turns"] += 1
+            out["retries_total"] += e.get("retries", 0)
+            if e.get("resolved") == "auto_wait":
+                out["auto_waits"] += 1
+    return out
 
 
 def default_client_factory(base_url, api_key_env, model):
@@ -48,21 +64,26 @@ def run_matrix(models, seeds, n_agents, sols, out_dir, base_url,
 
             r = run_episode(seed=seed, n_agents=n_agents, max_ticks=sols,
                             trace_path=trace, policy_factory=factory,
-                            llm_log_path=side, scenario=scenario)
+                            llm_log_path=side, scenario=scenario,
+                            prompt_info=prompt_info(model_id=model))
             m = metrics_from_trace(trace)
             r.update({"model": model, "sweep_dir": out_dir,
                       "ok_actions": m["ok_actions"],
                       "invalid_actions": m["invalid_actions"],
                       "sustainable_sols": m["sustainable_sols"],
-                      "trace": trace, "llm_log": side})
+                      "trace": trace, "llm_log": side,
+                      **sidecar_harness_metrics(side)})
             results.append(r)
     return results
 
 
 def comparison_table(results) -> str:
-    """Plain-text comparison table (offline, from results+metrics only)."""
+    """Plain-text comparison table (offline, from results+metrics only).
+    rty = repair retries used (ADR-0005), aw = turns auto-waited after a
+    failed retry — format competence, kept separate from bad decisions."""
     hdr = (f"{'model':38} {'seed':>4} {'outcome':>11} {'surv':>5} "
-           f"{'ok':>5} {'bad':>4} {'built':>3} {'deaths':>6}  invalid by reason")
+           f"{'ok':>5} {'bad':>4} {'rty':>3} {'aw':>3} "
+           f"{'built':>3} {'deaths':>6}  invalid by reason")
     lines = [hdr, "-" * len(hdr)]
     for r in results:
         built = [s for s in r["structures"] if s != "base"]
@@ -72,7 +93,9 @@ def comparison_table(results) -> str:
         lines.append(f"{r['model']:38} {r['seed']:>4} "
                      f"{r.get('outcome', '?'):>11} "
                      f"{r['sols_survived']:>5} {r['ok_actions']:>5} "
-                     f"{bad:>4} {len(built):>3} {len(r['deaths']):>6}  {reasons}")
+                     f"{bad:>4} {r.get('retries_total', 0):>3} "
+                     f"{r.get('auto_waits', 0):>3} "
+                     f"{len(built):>3} {len(r['deaths']):>6}  {reasons}")
     return "\n".join(lines)
 
 

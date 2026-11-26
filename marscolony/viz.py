@@ -136,7 +136,12 @@ function render(){
   document.getElementById("evts").innerHTML = ev;
   const raws = (D.raws||[]).filter(r=>r.sol===t.tick);
   document.getElementById("raws").innerHTML = raws.length
-    ? raws.map(r=>`<div class="sub">${r.agent} → ${JSON.stringify(r.parsed)}</div><div class="raw">${(r.raw||"").trim()||"(empty)"}</div>`).join("")
+    ? raws.map(r=>{
+        const atts = r.attempts || [{raw:r.raw, parsed:r.parsed}];
+        const tag = r.retries ? `<span class="bad">↻${r.retries}${r.resolved==="auto_wait"?" auto-waited":" repaired"}</span>` : "";
+        return atts.map(a=>`<div class="sub">${r.agent} attempt → ${JSON.stringify(a.parsed)}${a.reason?` <span class="bad">REJECTED: ${a.reason} (not sent)</span>`:""}</div><div class="raw">${(a.raw||"").trim()||"(empty)"}</div>`).join("")
+          + `<div class="sub">${r.agent} sent → ${JSON.stringify(r.parsed)} ${tag}</div>`;
+      }).join("")
     : '<div class="sub">no raw outputs (scripted run?)</div>';
 }
 function go(n){ cur = Math.max(0, Math.min(D.ticks.length-1, n)); render(); }

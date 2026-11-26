@@ -7,6 +7,51 @@ Format: `## YYYY-MM-DD — <agent> — <one-line summary>`
 
 ---
 
+## 2026-11-26 — Hermes — ADR-0005 in harness: worldbook file, verbatim history, one repair retry
+
+**Done**
+- `marscolony/worldbook.md` (WORLDBOOK-VERSION 1.0): the complete rulebook
+  as one versioned file — spatial micro-rules (ADR-0003), deposit rules
+  (ADR-0004), costs/rates/thresholds, action schema, reply protocol, one
+  worked example. Ad-hoc SYSTEM_PROMPT string is gone. A guard test asserts
+  the worldbook's numbers match the engine constants (drift = test failure).
+- `harness.py`: `load_worldbook()` (version parsed from file, sha256
+  computed — the file is the version source of truth), `prompt_info()`
+  attribution block, `validate_action_shape()` mirroring ONLY the engine's
+  format-level rejections (invalid_json / unknown_action_type /
+  malformed_move / unknown_structure_type).
+- ADR-0005 policy in `LLMPolicy`: format-invalid reply -> EXACTLY ONE
+  repair retry showing the validation error; second failure -> engine-side
+  `wait` + a NOTE next sol telling the agent it was auto-waited (honest
+  trace: the sent wait is a real wait). Spatial/resource rejections are
+  NEVER retried — they are decision-quality signal owned by the engine.
+  Conversation history is now FULL VERBATIM by default (`window=None`;
+  the numeric window survives as the deliberate memory-stress variant).
+- ADR-0008 attribution completed: trace header gains `prompt_version`,
+  `prompt_hash`, `model_id` (null for scripted runs); engine state schema
+  is untouched so `__version__` stays 0.3.0-engine and old traces stay
+  replayable. Sidecar entries gain per-turn `retries`, `resolved`
+  (model/retry/auto_wait) and `attempts[]` (every raw output + rejection
+  reason). Sweep results + comparison table gain rty/aw columns — "bad at
+  JSON" is now a separate metric from "bad decisions".
+- Verified: 66/66 tests (+18); scripted + LLM-style (FakeClient) episodes
+  replay hash-clean; two same-seed scripted runs identical over 25 ticks;
+  viz renders attempts (JSON parses back, id check, node --check OK).
+
+**Next**
+- Fabian's verdict on ADR-0003..0009 (walkthrough delivered 2026-11-26;
+  clarify form timed out — status untouched, all seven still Proposed).
+- Worldbook edits after acceptance = content change = new prompt_hash and
+  a WORLDBOOK-VERSION bump (ADR-0008 freeze policy); first real-model run
+  should follow.
+- Bot v2 (success-capable scripted client) and the 5-seed outcome sweep
+  still queued behind the ADR verdict.
+
+**Broken / known gaps**
+- Carry-over: legacy scripted bot cannot reach `success` (bot v2 queued).
+- Long-episode context overflow (verbatim history) will need its own ADR
+  per ADR-0005 — not hit at <=120 sols.
+
 ## 2026-11-25 — Hermes — Engine branch: v0.3 engine implementing ADR-0004..0008
 
 **Done**

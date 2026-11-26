@@ -2,7 +2,8 @@
 
 Format (one JSON object per line):
   {"kind":"run",  seed, agents, version, scenario, scenario_hash,
-                 code_commit, ts_start}                      <- line 1
+                 code_commit, prompt_version, prompt_hash, model_id,
+                 ts_start}                                          <- line 1
   {"kind":"tick", tick, actions, events, deaths, sustainable_sol,
                  state_hash, state}
   {"kind":"end",  reason, ticks, ts_end}
@@ -54,15 +55,20 @@ def _git_commit() -> str:
 
 
 class TraceWriter:
-    def __init__(self, path: str, state: dict):
+    def __init__(self, path: str, state: dict,
+                 prompt_info: "dict | None" = None):
         self.f = open(path, "w", encoding="utf-8")
         sc = state.get("scenario")
+        pi = prompt_info or {}
         self.f.write(json.dumps({
             "kind": "run", "seed": state["seed"], "version": __version__,
             "agents": [a["id"] for a in state["agents"]],
             "scenario": sc,
             "scenario_hash": scenario_hash(sc) if sc else None,
             "code_commit": _git_commit(),
+            "prompt_version": pi.get("prompt_version"),
+            "prompt_hash": pi.get("prompt_hash"),
+            "model_id": pi.get("model_id"),
             "ts_start": _utcnow(),
         }, sort_keys=True) + "\n")
 

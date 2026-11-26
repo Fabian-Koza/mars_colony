@@ -53,8 +53,11 @@ colony storage, all structures, nearby agents, storm flag, and its goal
 - Energy costs are effort *inside* the sol, not time slices.
 - Wall-clock never enters the rules. A slow model gets no fewer actions
   than a fast one (turn-based is a measurement-integrity decision).
-- LLM turn failures: no valid JSON within the API timeout → auto-`wait`,
-  logged; per-turn timestamps in the sidecar make decision-latency a metric.
+- LLM reply protocol (ADR-0005): a format-invalid reply gets exactly one
+  repair retry showing the validation error; if that also fails, the sol
+  resolves as auto-`wait` — retry counts and raw attempts (sidecar) keep
+  "bad at JSON" a separate metric from "bad decisions". Per-turn
+  timestamps in the sidecar make decision-latency a metric.
 
 ## The agent
 
@@ -131,7 +134,10 @@ A scenario sets: map (procedural+seed or fixed rows+deposits), base,
 starting storage/caps, deposit densities, event parameters, win streak,
 sol cap. The full scenario dict + its hash are embedded in every trace
 header (ADR-0008 attribution: `scenario_hash`, `code_commit`, `version`,
-`ts_start`).
+`prompt_version`, `prompt_hash`, `model_id`, `ts_start`). The agent's
+rulebook is the versioned file `marscolony/worldbook.md`; any text change
+bumps its `WORLDBOOK-VERSION` and its hash rides in the header, so runs
+from different prompt versions never share a comparison (freeze policy).
 
 Bundled (`marscolony/scenarios/`):
 
