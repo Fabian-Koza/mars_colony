@@ -7,6 +7,25 @@ Format: `## YYYY-MM-DD — <agent> — <one-line summary>`
 
 ---
 
+## 2026-11-26 — Fabian + Hermes — ADR-0003..0009 ACCEPTED; engine merged to fabian
+
+**Done**
+- Fabian walked through all seven ADRs and accepted them as drafted
+  (via the verdict form). Status lines + decisions index flipped to
+  Accepted (2026-11-26). PLAN open questions resolved.
+- Merge gate met: `engine` (0.3.0-engine + ADR-0005 harness) merged into
+  `fabian`.
+
+**Next**
+- First real-model episode against worldbook v1.0 (single smoke run, then
+  the 5-seed x {baseline, depletion} outcome sweep, ADR-0008 protocol:
+  shared seed list, medians+spread).
+- Bot v2 (success-capable scripted client) — optional but lets a
+  `success` run be demonstrated and visualized end to end.
+
+**Broken / known gaps**
+- None new.
+
 ## 2026-11-26 — Hermes — ADR-0005 in harness: worldbook file, verbatim history, one repair retry
 
 **Done**

@@ -59,6 +59,7 @@ layer diagram: [notes/simulation-engine-approach.md](notes/simulation-engine-app
 - M2 kernel design details — RESOLVED (see `notes/m2-kernel-design.md`).
 - Foundational design for the next build phase (spatial rules, deposit
   layers, worldbook/memory protocol, episode semantics, scenario format,
-  experiment protocol, comms/ownership deferral) — DRAFTED as
-  ADR-0003…0009 (Proposed, 2026-11-25); **awaiting Fabian's acceptance**.
+  experiment protocol, comms/ownership deferral) — **RESOLVED: ADR-0003…
+  0009 accepted by Fabian 2026-11-26**; `engine` branch implements all of
+  them and now merges back to `fabian`.
 - Add OpenCode to the agent roster — when, and what changes in AGENTS.md?
