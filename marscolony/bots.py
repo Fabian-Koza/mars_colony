@@ -32,6 +32,26 @@ def _terrain_abs(obs: dict, ax: int, ay: int):
     return None
 
 
+def _deposit_amount(obs: dict, x: int, y: int) -> int:
+    """Remaining mineable ice on a tile, per ADR-0004 deposit layer."""
+    for d in obs["visible"]["deposits"]:
+        if d["x"] == x and d["y"] == y:
+            return sum(v for v in d["amount"].values() if v > 0)
+    return 0
+
+
+def _known_ice_from_obs(obs: dict, mem: dict):
+    """Track tiles with LIVE ice; a revealed-empty deposit is forgotten."""
+    vis = obs["visible"]
+    for d in vis["deposits"]:
+        t = (d["x"], d["y"])
+        if d["amount"].get("ice", 0) > 0:
+            if t not in mem["known_ice"]:
+                mem["known_ice"].append(t)
+        elif t in mem["known_ice"]:
+            mem["known_ice"].remove(t)
+
+
 def _nearest_ice(obs: dict, mem: dict):
     me = obs["self"]
     if not mem["known_ice"]:
@@ -40,12 +60,14 @@ def _nearest_ice(obs: dict, mem: dict):
 
 
 def _free_spot(obs: dict, mem: dict):
-    """First deterministic adjacent tile: passable, unoccupied, unused."""
+    """First deterministic adjacent tile: passable, unoccupied, ice-free,
+    unused (building on ice would bury a finite deposit — ADR-0003/0004)."""
     me = obs["self"]
     occupied = {(s["x"], s["y"]) for s in obs["structures"]}
     for dx, dy in DIRS:
         spot = (me["x"] + dx, me["y"] + dy)
-        if _terrain_abs(obs, *spot) in (".", "b", "i") \
+        if _terrain_abs(obs, *spot) in (".", "b") \
+                and _deposit_amount(obs, *spot) == 0 \
                 and spot not in occupied and spot not in mem["spots_used"]:
             return spot
     return None
@@ -67,16 +89,10 @@ def scripted_policy(obs: dict, mem: dict) -> dict:
     me = obs["self"]
     x, y = me["x"], me["y"]
 
-    # remember every ice tile ever seen; track current ice position
-    vis = obs["visible"]
-    for ry, row in enumerate(vis["terrain"]):
-        for rx, ch in enumerate(row):
-            if ch == "i":
-                t = (vis["x0"] + rx, vis["y0"] + ry)
-                if t not in mem["known_ice"]:
-                    mem["known_ice"].append(t)
-    here = _terrain_abs(obs, x, y)
-    if here == "i":
+    # deposit layer (ADR-0004): know live ice, forget depleted
+    _known_ice_from_obs(obs, mem)
+    here_dep = _deposit_amount(obs, x, y) > 0
+    if here_dep:
         mem["ice_at"] = (x, y)
 
     if me["energy"] < 7:
@@ -88,13 +104,13 @@ def scripted_policy(obs: dict, mem: dict) -> dict:
         p = mem["phase"]
 
         if p == "seek":
-            if here == "i":
+            if here_dep:
                 mem["phase"] = _next_phase(mem)
                 continue
             return _seek(obs, mem, x, y)
 
         if p in ("mine1", "mine2"):
-            if here != "i":
+            if not here_dep:
                 mem["phase"] = "seek"
                 mem["target"] = None
                 continue
@@ -128,7 +144,7 @@ def scripted_policy(obs: dict, mem: dict) -> dict:
             return _toward(me, spot)
 
         if p == "operated":
-            if here != "i":
+            if not here_dep:
                 mem["phase"] = "seek"
                 mem["target"] = None
                 continue

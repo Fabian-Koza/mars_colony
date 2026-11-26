@@ -1,7 +1,7 @@
 # 0006 — Episode semantics: three terminal states, permanent death
 
 - **Date:** 2026-11-25
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-26, Fabian)
 - **Decided with:** Fabian + Hermes
 
 ## Context

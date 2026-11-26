@@ -7,6 +7,111 @@ Format: `## YYYY-MM-DD — <agent> — <one-line summary>`
 
 ---
 
+## 2026-11-26 — Fabian + Hermes — ADR-0003..0009 ACCEPTED; engine merged to fabian
+
+**Done**
+- Fabian walked through all seven ADRs and accepted them as drafted
+  (via the verdict form). Status lines + decisions index flipped to
+  Accepted (2026-11-26). PLAN open questions resolved.
+- Merge gate met: `engine` (0.3.0-engine + ADR-0005 harness) merged into
+  `fabian`.
+
+**Next**
+- First real-model episode against worldbook v1.0 (single smoke run, then
+  the 5-seed x {baseline, depletion} outcome sweep, ADR-0008 protocol:
+  shared seed list, medians+spread).
+- Bot v2 (success-capable scripted client) — optional but lets a
+  `success` run be demonstrated and visualized end to end.
+
+**Broken / known gaps**
+- None new.
+
+## 2026-11-26 — Hermes — ADR-0005 in harness: worldbook file, verbatim history, one repair retry
+
+**Done**
+- `marscolony/worldbook.md` (WORLDBOOK-VERSION 1.0): the complete rulebook
+  as one versioned file — spatial micro-rules (ADR-0003), deposit rules
+  (ADR-0004), costs/rates/thresholds, action schema, reply protocol, one
+  worked example. Ad-hoc SYSTEM_PROMPT string is gone. A guard test asserts
+  the worldbook's numbers match the engine constants (drift = test failure).
+- `harness.py`: `load_worldbook()` (version parsed from file, sha256
+  computed — the file is the version source of truth), `prompt_info()`
+  attribution block, `validate_action_shape()` mirroring ONLY the engine's
+  format-level rejections (invalid_json / unknown_action_type /
+  malformed_move / unknown_structure_type).
+- ADR-0005 policy in `LLMPolicy`: format-invalid reply -> EXACTLY ONE
+  repair retry showing the validation error; second failure -> engine-side
+  `wait` + a NOTE next sol telling the agent it was auto-waited (honest
+  trace: the sent wait is a real wait). Spatial/resource rejections are
+  NEVER retried — they are decision-quality signal owned by the engine.
+  Conversation history is now FULL VERBATIM by default (`window=None`;
+  the numeric window survives as the deliberate memory-stress variant).
+- ADR-0008 attribution completed: trace header gains `prompt_version`,
+  `prompt_hash`, `model_id` (null for scripted runs); engine state schema
+  is untouched so `__version__` stays 0.3.0-engine and old traces stay
+  replayable. Sidecar entries gain per-turn `retries`, `resolved`
+  (model/retry/auto_wait) and `attempts[]` (every raw output + rejection
+  reason). Sweep results + comparison table gain rty/aw columns — "bad at
+  JSON" is now a separate metric from "bad decisions".
+- Verified: 66/66 tests (+18); scripted + LLM-style (FakeClient) episodes
+  replay hash-clean; two same-seed scripted runs identical over 25 ticks;
+  viz renders attempts (JSON parses back, id check, node --check OK).
+
+**Next**
+- Fabian's verdict on ADR-0003..0009 (walkthrough delivered 2026-11-26;
+  clarify form timed out — status untouched, all seven still Proposed).
+- Worldbook edits after acceptance = content change = new prompt_hash and
+  a WORLDBOOK-VERSION bump (ADR-0008 freeze policy); first real-model run
+  should follow.
+- Bot v2 (success-capable scripted client) and the 5-seed outcome sweep
+  still queued behind the ADR verdict.
+
+**Broken / known gaps**
+- Carry-over: legacy scripted bot cannot reach `success` (bot v2 queued).
+- Long-episode context overflow (verbatim history) will need its own ADR
+  per ADR-0005 — not hit at <=120 sols.
+
+## 2026-11-25 — Hermes — Engine branch: v0.3 engine implementing ADR-0004..0008
+
+**Done**
+- New branch `engine` (from fabian): first ADR-conformant engine build,
+  version `0.3.0-engine`. Evolves the M2 kernel rather than rewriting.
+- ADR-0004: terrain is passability-only; sparse `deposits` layer, finite
+  amounts (mine withdraws, depleted stays revealed), max 2 types/tile;
+  ice terrain char retired (old 0.2.x traces now refused at replay with a
+  clear version-mismatch message).
+- ADR-0006: three terminal outcomes — `colony_dead`, `success`
+  (scenario-declared net-positive streak; per-sol balance ledger incl.
+  structure inputs; a colony mining to stay alive is NOT self-sustaining),
+  `sol_cap` (runner-owned ceiling).
+- ADR-0007: `marscolony/scenario.py` loader + bundled scenarios
+  `baseline`, `storm_heavy` (stress), `depletion` (fixed 21x17 map: visible
+  seam + drying near patch + far ridge = exploration pressure).
+  Scenario dict embedded in state; CLI `--scenario` on run/sweep.
+- ADR-0008 (engine-side): trace header carries scenario+hash, code_commit,
+  ts_start/ts_end; LLM sidecar entries now have per-turn `ts`.
+  ADR-0005 worldbook-file + repair-retry deliberately NOT built yet.
+- Fixed-map validation lesson: DEFAULT's w/h leak through the merge —
+  fixed-map geometry is authoritative (regression test added).
+- Verified: 48/48 tests; scripted-bot episodes on all 3 scenarios replay
+  hash-clean; depletion kills a built-out colony at sol ~56 (pressure
+  works); baseline max sustain streak 6/30 (win is reachable but demands
+  more than single build-out — legacy bot cannot win yet, by design:
+  `success` should separate thriving from capping).
+
+**Next**
+- Fabian accepts/rejects ADR-0003..0009 (engine implements the drafts).
+- Worldbook file + one-repair-retry (ADR-0005) in harness; prompt version
+  bump protocol; then a 0.3.0 sweep (5 seeds x baseline+depletion) to get
+  first outcome-distribution data.
+- Bot v2 (optional): mine-marathon/rest cadence + panel doubling so the
+  scripted client can demonstrate a `success` run end to end.
+
+**Broken / known gaps**
+- Legacy scripted bot dies in most v0.3 baseline seeds (57-110 sols) —
+  acceptable for a validation client, but a `success`-capable reference
+  bot is still missing.
+
 ## 2026-11-25 — Hermes — Drafted foundational ADR set 0003–0009 (Proposed)
 
 **Done**

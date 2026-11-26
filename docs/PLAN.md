@@ -48,11 +48,18 @@ layer diagram: [notes/simulation-engine-approach.md](notes/simulation-engine-app
 | M4 — Scenarios & events | Seeded random events (dust storms etc.), scenario configs, multi-agent if decided | Not started |
 | M5 — Analysis | Offline metrics from traces, experiment runner, optional trace visualizer | Partial (visualizer + sweep runner done, 2026-11-05) |
 
+> **Engine branch (2026-11-26):** `engine` branch carries `0.3.0-engine` —
+> the first build implementing the draft ADRs 0004–0008 (deposit layering,
+> terminal outcomes, declarative scenarios, trace attribution) plus the
+> ADR-0005 harness protocol (versioned worldbook file, verbatim history,
+> one repair retry). Merges back to `fabian` once the ADRs are accepted.
+
 ## Open questions
 
 - M2 kernel design details — RESOLVED (see `notes/m2-kernel-design.md`).
 - Foundational design for the next build phase (spatial rules, deposit
   layers, worldbook/memory protocol, episode semantics, scenario format,
-  experiment protocol, comms/ownership deferral) — DRAFTED as
-  ADR-0003…0009 (Proposed, 2026-11-25); **awaiting Fabian's acceptance**.
+  experiment protocol, comms/ownership deferral) — **RESOLVED: ADR-0003…
+  0009 accepted by Fabian 2026-11-26**; `engine` branch implements all of
+  them and now merges back to `fabian`.
 - Add OpenCode to the agent roster — when, and what changes in AGENTS.md?

@@ -1,0 +1,39 @@
+{
+  "name": "depletion",
+  "comment": "Fixed 21x17 map for paired A/B (ADR-0007/0008). A small seam (40 water) is visible from spawn; the near patch (~190 total) dries mid-run for two agents; the far ridge holds 280. Tests exploration-vs-exploitation: push out or die. No storms — pure resource pressure.",
+  "map": {
+    "mode": "fixed",
+    "terrain": [
+      ".....................",
+      ".ccc.................",
+      ".ccc..........bb.....",
+      "..............bb.....",
+      ".....b........bbb....",
+      ".....................",
+      "..b..................",
+      ".....................",
+      "..........b..........",
+      "..................c..",
+      "..................cc.",
+      "..b................c.",
+      ".....................",
+      ".......b.............",
+      ".....................",
+      ".....................",
+      "....................."
+    ],
+    "deposits": {
+      "10,8": {"ice": 40},
+      "9,6":  {"ice": 75},
+      "10,6": {"ice": 75},
+      "17,3": {"ice": 70},
+      "18,3": {"ice": 70},
+      "17,4": {"ice": 70},
+      "18,4": {"ice": 70}
+    }
+  },
+  "base": [10, 10],
+  "events": {"storm": {"p_pct": 0, "dur_min": 3, "dur_max": 6}},
+  "win": {"sustained_sols": 30},
+  "sol_cap": 120
+}

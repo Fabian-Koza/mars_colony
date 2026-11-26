@@ -1,3 +1,7 @@
-"""Mars Colony — M2 simulation kernel (headless deterministic tick engine, ADR-0001)."""
+"""Mars Colony — simulation engine (headless deterministic tick engine, ADR-0001).
 
-__version__ = "0.2.0-m2"
+0.3.0-engine: ADR-conformant build on the `engine` branch — terrain/deposit
+layering (ADR-0004), three terminal outcomes (ADR-0006), declarative
+scenarios (ADR-0007), attributed trace headers (ADR-0008)."""
+
+__version__ = "0.3.0-engine"

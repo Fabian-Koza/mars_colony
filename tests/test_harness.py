@@ -1,12 +1,16 @@
 """M3 harness tests — offline, deterministic, no network (FakeClient)."""
 
+import hashlib
 import json
 import os
 import tempfile
 import unittest
 
+from marscolony import rules
 from marscolony.harness import (LLMPolicy, extract_action,
-                                render_observation, write_sidecar)
+                                load_worldbook, prompt_info,
+                                render_observation, validate_action_shape,
+                                write_sidecar)
 from marscolony.rules import step
 from marscolony.runner import run_episode
 from marscolony.trace import replay
@@ -74,7 +78,7 @@ class TestLLMPolicyIntegration(unittest.TestCase):
         res = run_episode(seed=3, n_agents=1, max_ticks=5, trace_path=path,
                           policy_factory=lambda: LLMPolicy(client, "a1"),
                           llm_log_path=side)
-        self.assertIsNone(res["episode_over"])
+        self.assertEqual(res["outcome"], "sol_cap")   # alive at the cap
         with open(side) as f:
             entries = [json.loads(l) for l in f]
         self.assertEqual(len(entries), 5)
@@ -91,7 +95,7 @@ class TestLLMPolicyIntegration(unittest.TestCase):
                     policy_factory=lambda: LLMPolicy(client, "a1"))
         second_prompt = client.calls[1]["messages"][-1]["content"]
         self.assertIn("REJECTED", second_prompt)
-        self.assertIn("not_on_ice", second_prompt)
+        self.assertIn("no_deposit", second_prompt)
 
     def test_conversation_window_bounds_memory(self):
         client = FakeClient(['{"type":"wait"}'])
@@ -153,6 +157,225 @@ class TestExperimentMatrix(unittest.TestCase):
         table = comparison_table(results)
         self.assertIn("model-A", table)
         self.assertEqual(len(table.splitlines()), 6)  # hdr, rule, 4 rows
+
+
+class TestWorldbook(unittest.TestCase):
+    """ADR-0005: the rulebook is one versioned file, and its numbers must
+    not drift from the engine constants it describes."""
+
+    def test_loader_version_and_hash(self):
+        wb = load_worldbook()
+        self.assertRegex(wb["version"], r"^\d+\.\d+")
+        with open(os.path.join(os.path.dirname(
+                rules.__file__), "worldbook.md"), encoding="utf-8") as f:
+            self.assertEqual(
+                wb["sha256"],
+                hashlib.sha256(f.read().encode("utf-8")).hexdigest())
+
+    def test_prompt_info_block(self):
+        pi = prompt_info(model_id="m/1")
+        self.assertEqual(set(pi),
+                         {"prompt_version", "prompt_hash", "model_id"})
+        self.assertEqual(pi["model_id"], "m/1")
+
+    def test_numbers_match_engine(self):
+        wb = load_worldbook()["text"]
+        for act, cost in rules.ACTION_COST.items():
+            self.assertRegex(
+                wb, rf"{act}:\s*energy \+?{cost}",
+                f"worldbook energy cost for {act} drifted from engine")
+        self.assertRegex(wb, rf"yield {rules.MINE_YIELD} water")
+        self.assertRegex(wb, rf"restores \+{rules.REST_ENERGY} energy")
+        for stype, cost in rules.BUILD_COST.items():
+            self.assertRegex(wb, rf"{stype}:\s*cost {cost}",
+                             f"worldbook build cost for {stype} drifted")
+        self.assertRegex(wb, r"1 o2, 1 water, 1 food")
+        self.assertEqual(rules.CONSUME, {"o2": 1, "water": 1, "food": 1})
+
+    def test_tokens_filled(self):
+        from marscolony.harness import render_worldbook
+        out = render_worldbook(load_worldbook()["text"], "a7",
+                               {"sustained_sols": 30, "sol_cap": 120})
+        self.assertNotIn("{{", out)
+        self.assertIn("agent a7", out)
+        self.assertIn("for 30 consecutive", out)
+        self.assertIn("sol 120", out)
+
+
+class TestActionShapeValidation(unittest.TestCase):
+    """Only FORMAT-level invalidity is retried; decision-level rejections
+    stay with the engine (they are the behavioral signal)."""
+
+    def test_valid_shapes_pass(self):
+        for a in ({"type": "wait"}, {"type": "rest"}, {"type": "mine"},
+                  {"type": "move", "dx": 1, "dy": 0},
+                  {"type": "build", "structure": "panel"}):
+            self.assertIsNone(validate_action_shape(a))
+
+    def test_format_reasons(self):
+        self.assertEqual(validate_action_shape({"type": "INVALID_JSON"}),
+                         "invalid_json")
+        self.assertEqual(validate_action_shape("not even a dict"),
+                         "invalid_json")
+        self.assertEqual(validate_action_shape({"type": "fly"}),
+                         "unknown_action_type")
+        self.assertEqual(
+            validate_action_shape({"type": "move", "dx": 2, "dy": 0}),
+            "malformed_move")
+        self.assertEqual(
+            validate_action_shape({"type": "move", "dx": 1, "dy": 1}),
+            "malformed_move")
+        self.assertEqual(
+            validate_action_shape({"type": "move", "dx": 1}),
+            "malformed_move")
+        self.assertEqual(
+            validate_action_shape({"type": "build", "structure": "reactor"}),
+            "unknown_structure_type")
+
+    def test_decision_level_actions_pass_shape_gate(self):
+        # spatial/resource legality is the ENGINE's call, never retried:
+        for a in ({"type": "mine"},                      # no_deposit etc.
+                  {"type": "build", "structure": "panel"}):
+            self.assertIsNone(validate_action_shape(a))
+
+
+class TestRepairRetry(unittest.TestCase):
+    """ADR-0005: exactly one repair retry, then auto-wait. Retry counts
+    are logged so 'bad at JSON' is separable from 'bad decisions'."""
+
+    def _obs(self):
+        st = make_state(3, ["a1"])
+        from marscolony.observation import observation
+        return observation(st, "a1")
+
+    def test_valid_first_try_single_call(self):
+        c = FakeClient(['{"type":"wait"}'])
+        pol = LLMPolicy(c, "a1")
+        self.assertEqual(pol(self._obs(), {}), {"type": "wait"})
+        self.assertEqual(len(c.calls), 1)
+        self.assertEqual(pol.log[-1]["retries"], 0)
+        self.assertEqual(pol.log[-1]["resolved"], "model")
+
+    def test_one_retry_recovers(self):
+        c = FakeClient(["I will think about it.", '{"type":"rest"}'])
+        pol = LLMPolicy(c, "a1")
+        self.assertEqual(pol(self._obs(), {}), {"type": "rest"})
+        self.assertEqual(len(c.calls), 2)                     # exactly one
+        retry_prompt = c.calls[1]["messages"][-1]["content"]
+        self.assertIn("REJECTED", retry_prompt)
+        self.assertIn("invalid_json", retry_prompt)
+        self.assertEqual(c.calls[1]["messages"][-2]["content"],
+                         "I will think about it.")            # shown back
+        e = pol.log[-1]
+        self.assertEqual(e["retries"], 1)
+        self.assertEqual(e["resolved"], "retry")
+        self.assertEqual(len(e["attempts"]), 2)
+        self.assertEqual(e["attempts"][0]["reason"], "invalid_json")
+        self.assertNotIn("reason", e["attempts"][1])          # repaired one
+
+    def test_two_failures_auto_wait(self):
+        c = FakeClient(["nonsense", "still nonsense"])
+        pol = LLMPolicy(c, "a1")
+        self.assertEqual(pol(self._obs(), {}), {"type": "wait"})
+        self.assertEqual(len(c.calls), 2)                     # never a 3rd
+        e = pol.log[-1]
+        self.assertEqual(e["resolved"], "auto_wait")
+        self.assertEqual(e["parsed"], {"type": "wait"})
+        self.assertEqual(e["attempts"][1]["reason"], "invalid_json")
+        # the sent wait is HONEST in the trace; the NOTE tells the agent
+        # next sol that it was auto-waited, not chosen (turn 2's first
+        # call is index 2: [t1c1, t1c2, t2c1, t2c2]):
+        pol(self._obs(), {})
+        self.assertIn("auto-waited", c.calls[2]["messages"][-1]["content"])
+
+    def test_auto_wait_action_replays_clean(self):
+        c = FakeClient(["junk", "junk"])
+        path = tmp()
+        res = run_episode(seed=3, n_agents=1, max_ticks=3, trace_path=path,
+                          policy_factory=lambda: LLMPolicy(c, "a1"))
+        self.assertEqual(res["outcome"], "sol_cap")
+        rep = replay(path)
+        self.assertEqual(rep["mismatches"], [])
+
+    def test_unknown_type_also_retries(self):
+        c = FakeClient(['{"type":"fly","dx":1}', '{"type":"wait"}'])
+        pol = LLMPolicy(c, "a1")
+        self.assertEqual(pol(self._obs(), {}), {"type": "wait"})
+        self.assertEqual(pol.log[-1]["resolved"], "retry")
+        self.assertEqual(pol.log[-1]["attempts"][0]["reason"],
+                         "unknown_action_type")
+
+
+class TestVerbatimHistory(unittest.TestCase):
+    def test_default_keeps_full_history(self):
+        c = FakeClient(['{"type":"wait"}'])
+        pol = LLMPolicy(c, "a1")
+        st = make_state(3, ["a1"])
+        from marscolony.observation import observation
+        for _ in range(12):
+            pol(observation(st, "a1"), {})
+        users = [m for m in pol.convo if m["role"] == "user"]
+        self.assertEqual(len(users), 12)      # nothing dropped
+
+    def test_window_override_still_bounds(self):
+        c = FakeClient(['{"type":"wait"}'])
+        pol = LLMPolicy(c, "a1", window=3)
+        st = make_state(3, ["a1"])
+        from marscolony.observation import observation
+        for _ in range(10):
+            pol(observation(st, "a1"), {})
+            users = [m for m in pol.convo if m["role"] == "user"]
+            self.assertLessEqual(len(users), 3)
+
+
+class TestHeaderAttribution(unittest.TestCase):
+    """ADR-0008: prompt side of the header (worldbook version/hash, model)."""
+
+    def _header(self, path):
+        with open(path, encoding="utf-8") as f:
+            return json.loads(f.readline())
+
+    def test_scripted_run_has_null_prompt_fields(self):
+        path = tmp()
+        run_episode(seed=3, n_agents=1, max_ticks=2, trace_path=path)
+        h = self._header(path)
+        self.assertIsNone(h["prompt_hash"])
+        self.assertIsNone(h["model_id"])
+
+    def test_llm_run_header_carries_worldbook_identity(self):
+        path = tmp()
+        run_episode(seed=3, n_agents=1, max_ticks=2, trace_path=path,
+                    policy_factory=lambda: LLMPolicy(FakeClient(
+                        ['{"type":"wait"}']), "a1"),
+                    prompt_info=prompt_info(model_id="fake/x"))
+        h = self._header(path)
+        wb = load_worldbook()
+        self.assertEqual(h["prompt_hash"], wb["sha256"])
+        self.assertEqual(h["prompt_version"], wb["version"])
+        self.assertEqual(h["model_id"], "fake/x")
+        # additive header must not disturb replay:
+        self.assertEqual(replay(path)["mismatches"], [])
+
+
+class TestSidecarRetryTelemetry(unittest.TestCase):
+    def test_sidecar_metrics_offline(self):
+        from marscolony.experiment import sidecar_harness_metrics
+        pol = LLMPolicy(FakeClient(["junk", '{"type":"wait"}',
+                                    "junk", "junk"]), "a1")
+        st = make_state(3, ["a1"])
+        from marscolony.observation import observation
+        pol(observation(st, "a1"), {})      # turn 1: retry -> repaired
+        pol(observation(st, "a1"), {})      # turn 2: retry -> auto_wait
+        path = tmp("s.jsonl")
+        write_sidecar(path, {"a1": pol})
+        m = sidecar_harness_metrics(path)
+        self.assertEqual(m, {"retries_total": 2, "turns": 2,
+                             "auto_waits": 1})
+
+    def test_missing_sidecar_zero_metrics(self):
+        from marscolony.experiment import sidecar_harness_metrics
+        self.assertEqual(sidecar_harness_metrics(tmp("none.jsonl")),
+                         {"retries_total": 0, "turns": 0, "auto_waits": 0})
 
 
 if __name__ == "__main__":

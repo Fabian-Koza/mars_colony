@@ -1,0 +1,5 @@
+{
+  "name": "storm_heavy",
+  "comment": "Stress scenario: storms ~every 8 sols lasting 4-8 sols. Measures response to repeated power collapse (M4 event-stress family).",
+  "events": {"storm": {"p_pct": 12, "dur_min": 4, "dur_max": 8}}
+}
